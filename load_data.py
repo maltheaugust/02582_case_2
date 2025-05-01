@@ -13,10 +13,11 @@ def load(csv: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     raw_feature_cols = [col for col in df.columns if any(prefix in col for prefix in ['HR_', 'EDA_', 'TEMP_'])]
     questionnaire_cols = ['Frustrated', 'upset', 'hostile', 'alert', 'ashamed',
                           'inspired', 'nervous', 'attentive', 'afraid', 'active', 'determined']
-    meta_cols = ['Team_ID', 'Round', 'Puzzler', 'raw_data_path', 'Individual', 'original_ID', 'Cohort']
+    meta_cols = ['Team_ID', 'Round', 'Phase', 'Puzzler', 'raw_data_path', 'Individual', 'original_ID', 'Cohort']
 
     # Include 'Phase' with raw data
     raw_data = df[raw_feature_cols + questionnaire_cols + ['Phase'] + ['Puzzler']]
+    
     metadata = df[meta_cols]
 
     return raw_data, metadata
