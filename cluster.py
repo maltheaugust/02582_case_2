@@ -10,140 +10,124 @@ from sklearn.metrics import silhouette_score
 from load_data import load
 
 
-# load dataset 
-file_path = "data/HR_data_2.csv"
-df = load(file_path)
 
 
-# biosignal, questionnaire, and puzzler features
-biosignal_features = [col for col in df.columns if any(prefix in col for prefix in ['HR_', 'EDA_', 'TEMP_'])]
-questionnaire_features = ['Frustrated', 'upset', 'hostile', 'alert', 'ashamed',
-                          'inspired', 'nervous', 'attentive', 'afraid', 'active', 'determined']
-
-puzzler_feature = "Puzzler"
-cluster_col = "Cluster"
-phase_col = "Phase"
-round_col = "Round"
-
-# Drop rows with missing biosignal values
-X = df[biosignal_features].dropna()
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-
-# Apply PCA to reduce dimensionality before clustering
-pca_all = PCA(n_components=10)
-X_pca_all = pca_all.fit_transform(X_scaled)
-
-# Variance explained plot
-explained_var_ratio = pca_all.explained_variance_ratio_.cumsum()
-plt.figure(figsize=(8, 5))
-plt.plot(range(1, len(explained_var_ratio) + 1), explained_var_ratio, marker='o')
-plt.xlabel("Number of Principal Components")
-plt.ylabel("Cumulative Explained Variance")
-plt.title("Explained Variance by PCA Components")
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-
-
-# PCA for visualization
-pca = PCA(n_components=2)
-X_pca = pca.fit_transform(X_scaled)
-
-# KMeans clustering
-kmeans = KMeans(n_clusters=2, random_state=42)
-labels = kmeans.fit_predict(X_scaled)
-
-# Add clustering results back to dataframe
-df_clustered = df.loc[X.index].copy()
-df_clustered[cluster_col] = labels
-df_clustered["PCA1"] = X_pca[:, 0]
-df_clustered["PCA2"] = X_pca[:, 1]
-
-# Silhouette score
-silhouette = silhouette_score(X_scaled, labels)
-print(f"Silhouette Score: {silhouette:.2f}")
-
-# PCA scatter plot
-plt.figure(figsize=(10, 6))
-sns.scatterplot(data=df_clustered, x="PCA1", y="PCA2", hue=cluster_col, style=puzzler_feature, palette="Set2")
-plt.title(f"PCA of Physiological Features with KMeans Clusters (Silhouette: {silhouette:.2f})")
-plt.tight_layout()
-plt.show()
-
-# Boxplot of questionnaire scores by cluster
-melted = df_clustered.melt(id_vars=[cluster_col], value_vars=questionnaire_features)
-plt.figure(figsize=(14, 6))
-sns.boxplot(data=melted, x="variable", y="value", hue=cluster_col)
-plt.xticks(rotation=45)
-plt.title("Distribution of Questionnaire Responses by Cluster")
-plt.tight_layout()
-plt.show()
-
-# Cluster × Phase
-pd.crosstab(df_clustered[cluster_col], df_clustered[phase_col], normalize='index').plot(
-    kind='bar', stacked=True, colormap='viridis', figsize=(8,5))
-plt.title("Cluster Distribution Across Phases")
-plt.xlabel("Cluster")
-plt.ylabel("Proportion")
-plt.legend(title="Phase")
-plt.tight_layout()
-plt.show()
-
-# Cluster × Round
-pd.crosstab(df_clustered[cluster_col], df_clustered[round_col], normalize='index').plot(
-    kind='bar', stacked=True, colormap='plasma', figsize=(8,5))
-plt.title("Cluster Distribution Across Rounds")
-plt.xlabel("Cluster")
-plt.ylabel("Proportion")
-plt.legend(title="Round")
-plt.tight_layout()
-plt.show()
-
-# Cluster × Role (Puzzler vs Instructor)
-role_dist = pd.crosstab(df_clustered[cluster_col], df_clustered[puzzler_feature], normalize='index')
-role_dist.columns = ["Instructor", "Puzzler"]
-role_dist.plot(kind='bar', stacked=True, colormap='Set2', figsize=(8,5))
-plt.title("Cluster Distribution by Role")
-plt.xlabel("Cluster")
-plt.ylabel("Proportion")
-plt.legend(title="Role")
-plt.tight_layout()
-plt.show()
-
-# Mean questionnaire scores by cluster
-df_clustered.groupby(cluster_col)[questionnaire_features].mean().T.plot(
-    kind='bar', figsize=(14, 6), colormap='Accent')
-plt.title("Average Questionnaire Responses per Cluster")
-plt.xlabel("Questionnaire Item")
-plt.ylabel("Mean Score")
-plt.xticks(rotation=45)
-plt.legend(title="Cluster")
-plt.tight_layout()
-plt.show()
-
-
-# Fit GMM
-gmm = GaussianMixture(n_components=3, random_state=42)
-gmm_labels = gmm.fit_predict(X_scaled)
-silhouette_gmm = silhouette_score(X_scaled, gmm_labels)
+def reduce_to_threshold(raw_data: pd.DataFrame, threshold: float = 0.80) -> pd.DataFrame:
+    raw_data_clean = raw_data.dropna()
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(raw_data_clean)
+    pca_full = PCA()
+    X_pca_full = pca_full.fit_transform(X_scaled)
+    cum_var = pca_full.explained_variance_ratio_.cumsum()
+    n_components = next(i + 1 for i, val in enumerate(cum_var) if val >= threshold)
+    pca_threshold = PCA(n_components=n_components)
+    X_pca_thresh = pca_threshold.fit_transform(X_scaled)
+    return pd.DataFrame(X_pca_thresh)
 
 
 
 
-# Prepare DataFrame for plotting
-df_gmm = df.loc[X.index].copy()
-df_gmm["Cluster"] = gmm_labels
-df_gmm["PCA1"] = X_pca[:, 0]
-df_gmm["PCA2"] = X_pca[:, 1]
 
-# Plot GMM cluster results
-plt.figure(figsize=(10, 6))
-sns.scatterplot(data=df_gmm, x="PCA1", y="PCA2", hue="Cluster", style=puzzler_feature, palette="Set2")
-plt.title(f"PCA of Physiological Features with GMM Clusters (Silhouette: {silhouette_gmm:.2f})")
-plt.tight_layout()
-plt.show()
+
+
+def main():
+    # load dataset 
+    file_path = "data/HR_data_2.csv"
+    raw_data, metadata = load(file_path)
+
+    min_variance_explained = 0.8
+
+    reduced_df = reduce_to_threshold(raw_data, threshold=min_variance_explained)
+
+    # biosignal, questionnaire, and puzzler features
+    biosignal_features = [col for col in raw_data.columns if any(prefix in col for prefix in ['HR_', 'EDA_', 'TEMP_'])]
+    questionnaire_features = ['Frustrated', 'upset', 'hostile', 'alert', 'ashamed',
+                            'inspired', 'nervous', 'attentive', 'afraid', 'active', 'determined']
+
+    puzzler_feature = "Puzzler"
+    cluster_col = "Cluster"
+    phase_col = "Phase"
+    round_col = "Round"
+
+
+    # PCA for visualization
+    pca = PCA(n_components=10) # ~80 variance explained with 10 components
+    X_pca = pca.fit_transform(X_scaled)
+
+    # KMeans clustering
+    kmeans = KMeans(n_clusters=3, random_state=42)
+    labels_kmeans = kmeans.fit_predict(X_scaled)
+    silhouette_kmeans = silhouette_score(X_scaled, labels_kmeans)
+
+    # Combine data for analysis
+    df_clustered = pd.concat([raw_data_clean, metadata_clean], axis=1)
+    df_clustered["Cluster"] = labels_kmeans
+    df_clustered["PCA1"] = X_pca[:, 0]
+    df_clustered["PCA2"] = X_pca[:, 1]
+
+    # Visualize clusters
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(data=df_clustered, x="PCA1", y="PCA2", hue="Cluster", style="Puzzler", palette="Set2")
+    plt.title(f"PCA of Biosignals with KMeans Clusters (Silhouette: {silhouette_kmeans:.2f})")
+    plt.tight_layout()
+    plt.show()
+
+    # Boxplot of questionnaire responses by cluster
+    melted = df_clustered.melt(id_vars=["Cluster"], value_vars=questionnaire_features)
+    plt.figure(figsize=(14, 6))
+    sns.boxplot(data=melted, x="variable", y="value", hue="Cluster")
+    plt.xticks(rotation=45)
+    plt.title("Questionnaire Scores by Cluster (KMeans)")
+    plt.tight_layout()
+    plt.show()
+
+    # Cross-tab analyses
+    for col, title, cmap in [("Phase", "Phases", "viridis"), ("Round", "Rounds", "plasma"), ("Puzzler", "Role", "Set2")]:
+        table = pd.crosstab(df_clustered["Cluster"], df_clustered[col], normalize='index')
+        if col == "Puzzler":
+            table.columns = ["Instructor", "Puzzler"]
+        table.plot(kind='bar', stacked=True, colormap=cmap, figsize=(8, 5))
+        plt.title(f"Cluster Distribution Across {title}")
+        plt.xlabel("Cluster")
+        plt.ylabel("Proportion")
+        plt.legend(title=title)
+        plt.tight_layout()
+        plt.show()
+
+
+    # Average questionnaire scores
+    df_clustered.groupby("Cluster")[questionnaire_features].mean().T.plot(kind='bar', figsize=(14, 6), colormap='Accent')
+    plt.title("Average Questionnaire Scores by Cluster")
+    plt.xlabel("Questionnaire Item")
+    plt.ylabel("Mean Score")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+
+    # GMM Clustering
+    gmm = GaussianMixture(n_components=3, random_state=42)
+    gmm_labels = gmm.fit_predict(X_scaled)
+    silhouette_gmm = silhouette_score(X_scaled, gmm_labels)
+
+    df_gmm = pd.concat([raw_data_clean, metadata_clean], axis=1)
+    df_gmm["Cluster"] = gmm_labels
+    df_gmm["PCA1"] = X_pca[:, 0]
+    df_gmm["PCA2"] = X_pca[:, 1]
+
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(data=df_gmm, x="PCA1", y="PCA2", hue="Cluster", style="Puzzler", palette="Set2")
+    plt.title(f"PCA of Biosignals with GMM Clusters (Silhouette: {silhouette_gmm:.2f})")
+    plt.tight_layout()
+    plt.show()
+
+
+    # ANOVA tests on questionnaire features
+    print("\nANOVA tests for questionnaire features across KMeans clusters:")
+    for var in questionnaire_features:
+        groups = [group[var].dropna().values for name, group in df_clustered.groupby("Cluster")]
+        stat, p = f_oneway(*groups)
+        print(f"{var}: p = {p:.4f}")
 
 
 # # Prepare physiological data for clustering
