@@ -15,6 +15,19 @@ def load(csv: str) -> tuple[pd.DataFrame, pd.DataFrame]:
                           'inspired', 'nervous', 'attentive', 'afraid', 'active', 'determined']
     meta_cols = ['Team_ID', 'Round', 'Phase', 'Puzzler', 'raw_data_path', 'Individual', 'original_ID', 'Cohort']
 
+    # Fill missing values in questionnaire columns with mode
+    for col in questionnaire_cols:
+        if col in df.columns:
+            mode = df[col].mode()
+            if not mode.empty:
+                df[col].fillna(mode[0], inplace=True)
+
+        # Fill missing values in raw feature columns with mean
+    for col in raw_feature_cols:
+        if col in df.columns:
+            mean_val = df[col].mean()
+            df[col].fillna(mean_val, inplace=True)
+
     # Include 'Phase' with raw data
     raw_data = df[raw_feature_cols + questionnaire_cols + ['Phase'] + ['Puzzler']]
     
@@ -25,4 +38,6 @@ def load(csv: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 if __name__ == "__main__":
     df = load("data/HR_data_2.csv")
-    print(df.head())
+    raw_data, metadata = df
+    print("Number of NaN values in raw_data:", raw_data.isna().sum().sum())
+    print("Number of NaN values in metadata:", metadata.isna().sum().sum())
