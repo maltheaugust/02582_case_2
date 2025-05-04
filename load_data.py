@@ -67,7 +67,8 @@ def load_and_normalize_by_individual(csv, cohort="D1_2"):
             mean_val = df[col].mean()
             df[col].fillna(mean_val, inplace=True)
 
-    df = df[df['Cohort']==cohort]
+    if cohort:
+        df = df[df['Cohort']==cohort]
 
     # Include 'Individual' in raw_data to allow per-individual normalization
     raw_data = df[raw_feature_cols + questionnaire_cols + ['Phase', 'Puzzler', 'Individual']]
