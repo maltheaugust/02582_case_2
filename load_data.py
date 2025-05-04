@@ -1,8 +1,9 @@
 import pandas as pd
 import os
+import numpy as np
 
 # Load the dataset
-def load(csv: str) -> tuple[pd.DataFrame, pd.DataFrame]: 
+def load(csv: str, cohort=None) -> tuple[pd.DataFrame, pd.DataFrame]: 
     # Get script directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(script_dir, csv)
@@ -28,15 +29,18 @@ def load(csv: str) -> tuple[pd.DataFrame, pd.DataFrame]:
             mean_val = df[col].mean()
             df[col].fillna(mean_val, inplace=True)
 
-    # Include 'Phase' with raw data
+    if cohort:
+        df = df[df['Cohort']==cohort]
+
     raw_data = df[raw_feature_cols + questionnaire_cols + ['Phase'] + ['Puzzler']]
+    # Include 'Phase' with raw data
     
     metadata = df[meta_cols]
 
     return raw_data, metadata
 
 
-def load_and_normalize_by_individual(csv):
+def load_and_normalize_by_individual(csv, cohort="D1_2"):
     # Get script directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(script_dir, csv)
@@ -62,6 +66,8 @@ def load_and_normalize_by_individual(csv):
         if col in df.columns:
             mean_val = df[col].mean()
             df[col].fillna(mean_val, inplace=True)
+
+    df = df[df['Cohort']==cohort]
 
     # Include 'Individual' in raw_data to allow per-individual normalization
     raw_data = df[raw_feature_cols + questionnaire_cols + ['Phase', 'Puzzler', 'Individual']]
@@ -100,6 +106,7 @@ if __name__ == "__main__":
     raw_data, metadata = df
     print("Number of NaN values in raw_data:", raw_data.isna().sum().sum())
     print("Number of NaN values in metadata:", metadata.isna().sum().sum())
-
+    
     raw_data, metadata = load_and_normalize_by_individual("data/HR_data_2.csv")
-    print(raw_data)
+    # print(raw_data)
+    
