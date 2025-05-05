@@ -27,6 +27,8 @@ def reduce_to_threshold(X: pd.DataFrame, threshold: float = 0.80) -> tuple[pd.Da
     return df_pca, n_components
 
 
+
+
 def main():
     file_path = "data/HR_data_2.csv"
     raw_data, _ = load(file_path)
